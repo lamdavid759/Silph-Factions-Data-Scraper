@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[137]:
+# In[ ]:
 
 
 # Inputs for Factions Scraping
@@ -15,7 +15,7 @@ cycleDictionary =  {"North America's First Cycle!": (0,1), "North America's Qual
                    "North America's Diamond Cycle": (1,1), "North America's Platinum Cycle":(1,2), "Promotions/Relegations":(1,1)}
 
 
-# In[138]:
+# In[ ]:
 
 
 # Imports and URLs 
@@ -37,7 +37,7 @@ factionRoster = {"Team MichiGengar": ['AhmadZR', 'ashsaigh','TrentSzcz','Carissa
 "Evanstonks": ['dgill5581', 'Warnerg', 'ProfSlade', 'Gundam95', 'leogeo0', 'basherbubbles', 'WindyQ','RandomDreamer','SageShadows']}
 
 PlatinumS1C2 = ["Team MichiGengar","Wing Attack", "TEAM OMEGALUL", "Icy Wind", "Helmet Heroes", "AquaTail HungerForce", "Madison Miltanks", "Evanstonks"]
-test = ["Evanstonks"]
+
 # Function for scraping
 def individualUserScrape(Username, queriedFaction):
     #Variables and Definitions
@@ -88,13 +88,18 @@ def individualUserScrape(Username, queriedFaction):
                 pattern = '\s\(*'
                 result = re.split(pattern,monName)
                 monName = result[0]+"-"+result[1]
+            elif "Castform" in monName:
+                if "Snowy" in monName: monName = 'Castform-Snowy'
+                elif "Rainy" in monName: monName = 'Castform-Rainy'
+                elif "Sunny" in monName: monName = 'Castform-Sunny'
+                elif "Normal" in monName: monName = 'Castform'
             if mon.find("img", class_="shadow"): monName = monName + '-S'
             roster.append(monName)
         tournamentResultDataHolder.append([queriedFaction, Username, cupType, season, cycle, boutNumber] + roster)
     return tournamentResultDataHolder
 
 
-# In[135]:
+# In[ ]:
 
 
 # Run Factions Scraping and Writing (first time)
@@ -109,7 +114,7 @@ with open(factionTeam+".csv", 'w', newline='') as f:
     write.writerows(factionData)
 
 
-# In[139]:
+# In[ ]:
 
 
 # Run Factions Scraping for a given bout in a tier
@@ -130,7 +135,7 @@ with open("Individual Bout Data"+".csv", 'w', newline='') as f:
     write.writerows(boutData)
 
 
-# In[140]:
+# In[ ]:
 
 
 with open("Individual Bout Data"+".csv", 'w', newline='') as f:
@@ -139,7 +144,7 @@ with open("Individual Bout Data"+".csv", 'w', newline='') as f:
     write.writerows(boutData)
 
 
-# In[80]:
+# In[ ]:
 
 
 # Inputs and Code for Individual Scraping
