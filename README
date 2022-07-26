@@ -1,1 +1,5 @@
 Data goes to: https://docs.google.com/spreadsheets/d/1r_iLB2JamSRHRJMjNrum2zbVJSA0uGJKQ9VqRprWYuk/edit#gid=1264267133
+Version 1 was original implementation of scraping code. 
+Version 2 extends on Version 1 by implementing procedural scraping of current Faction rosters. 
+This enables large scale scrapes across multiple regions and tiers. 
+Version 2 of spreadsheet extends these additional fields by including applicable filters. 
