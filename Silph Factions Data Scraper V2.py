@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[254]:
+# In[1]:
 
 
 # Imports and URLs 
@@ -15,8 +15,8 @@ import requests
 
 # Faction Information
 factionsURLBase = "https://silph.gg/factions/cycle/season-2-cycle-1-"
-factionsTiers = ["iron", "copper", "bronze", "silver", "gold", "platinum", "diamond", "emerald"]
-factionsRegions = ["latam"] #, "emea", "na", "apac"]
+factionsTiers = ["iron", "copper", "bronze", "silver", "gold", "platinum", "diamond", "emerald"] 
+factionsRegions = ["na", "latam", "emea", "apac"]
 
 # Example URL
 EmeraldNA = "https://silph.gg/factions/cycle/season-2-cycle-1-emerald-na"
@@ -31,7 +31,7 @@ for tier in factionsTiers:
         if get.status_code == 200: factionHomepages.append(url)
 
 
-# In[267]:
+# In[2]:
 
 
 #Initializes web scrape of factions in a given tier
@@ -65,6 +65,8 @@ def individualUserScrape(Username):
     page = requests.get(URL)
     soup = BeautifulSoup(page.content, "html.parser")
     silphData = soup.find("div",id="networkAndAchievements")
+    if silphData == None: return [] # Checks to see if someone is banned/no longer exists
+        
     tournamentResults = silphData.find_all("div",class_="tournament")
     tournamentResultDataHolder = []
     for result in tournamentResults: 
@@ -126,6 +128,7 @@ def individualUserScrape(Username):
             if monName == 'Armored Mewtwo': monName = 'Mewtwo-Armor'
             elif "Alolan" in monName: monName = monName.replace('Alolan ', '') + '-Alola'
             elif "Galarian" in monName: monName = monName.replace('Galarian ', '') + '-Galar'
+            elif "Hisuian" in monName: monName = monName.replace('Hisuian ', '') + '-Hisui'
             elif "Forme" in monName: 
                 pattern = '\s\(*'
                 result = re.split(pattern,monName)
@@ -142,7 +145,7 @@ def individualUserScrape(Username):
                 if "Snowy" in monName: monName = 'Castform-Snowy'
                 elif "Rainy" in monName: monName = 'Castform-Rainy'
                 elif "Sunny" in monName: monName = 'Castform-Sunny'
-                elif "Normal" in monName: monName = 'Castform'
+                elif "Normal" in monName: monName = 'Castform'                
             if mon.find("img", class_="shadow"): monName = monName + '-S'
             roster.append(monName)
         tournamentResultDataHolder.append([region, tier, fact, Username, cupType, season, cycle, boutNumber, record] + roster)
@@ -167,4 +170,49 @@ with open(exportedFileName+".csv", 'w', encoding="utf-8", newline='') as f:
     write = csv.writer(f)
     write.writerows([["Region", "Tier", "Team", "Player", "Format", "Season", "Cycle", "Bout", "Record", "Team #1", "Team #2", "Team #3", "Team #4", "Team #5", "Team #6"]])        
     write.writerows(boutData)
+
+
+# In[3]:
+
+
+# Partial Scrape
+# Similar to scrape above, but only writes data to file for given faction bouts
+boutData = []
+exportedFileName = "S2_C1_B9"
+selectedSeason = [2]; 
+selectedCycle = [1];
+selectedBout = [9];
+for tierLink in factionHomepages:
+    factionRosterDict = factionInfoScrape(tierLink)
+    for faction in factionRosterDict:
+        for member in factionRosterDict[faction]:
+            result = individualUserScrape(member)
+            for entry in result: 
+                if int(entry[5]) in selectedSeason and int(entry[6]) in selectedCycle and int(entry[7]) in selectedBout: boutData.append(entry)
+            
+with open(exportedFileName+".csv", 'w', encoding="utf-8", newline='') as f:
+    write = csv.writer(f)
+    write.writerows([["Region", "Tier", "Team", "Player", "Format", "Season", "Cycle", "Bout", "Record", "Team #1", "Team #2", "Team #3", "Team #4", "Team #5", "Team #6"]])        
+    write.writerows(boutData)
+
+
+# In[4]:
+
+
+boutData = []
+exportedFileName = "Custom Scrape Ex Members"
+userList = ["dgill5581", "RandomDreamer", "beeeach7"]
+for user in userList:
+    result = individualUserScrape(user)
+    for entry in result: boutData.append(entry)
+with open(exportedFileName+".csv", 'w', encoding="utf-8", newline='') as f:
+    write = csv.writer(f)
+    write.writerows([["Region", "Tier", "Team", "Player", "Format", "Season", "Cycle", "Bout", "Record", "Team #1", "Team #2", "Team #3", "Team #4", "Team #5", "Team #6"]])        
+    write.writerows(boutData)
+
+
+# In[ ]:
+
+
+
 
