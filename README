@@ -2,4 +2,5 @@ Data goes to: https://docs.google.com/spreadsheets/d/1r_iLB2JamSRHRJMjNrum2zbVJS
 Version 1 was original implementation of scraping code. 
 Version 2 extends on Version 1 by implementing procedural scraping of current Faction rosters. 
 This enables large scale scrapes across multiple regions and tiers. 
-Version 2 of spreadsheet extends these additional fields by including applicable filters. 
+Version 2 of spreadsheet extends these additional fields by including applicable filters.
+Data is also cleaned via Tableau Prep Builder -- this cleaned, pivoted data is located in "Factions Team Database V2 - Master Database.csv" locally and Google Sheets online. 
