@@ -1,6 +1,6 @@
 # Page requests and web scraping
 import requests
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, SoupStrainer
 import re
 import csv
 import time
@@ -114,14 +114,9 @@ def individual_user_scrape(username):
     all_results = []
     #Initializes web scrape
     page = requests.get("https://sil.ph/" + username)
-    soup = BeautifulSoup(page.content, "html.parser")
-    silph_data = soup.find("div",id="networkAndAchievements")
-    # Checks to see if someone is banned/no longer exists
-    if silph_data == None: 
-        return pd.DataFrame(all_results, columns=results_categories) 
-        
-    tournament_results = silph_data.find_all("div",class_="tournament")
-    
+    factions_strainer = SoupStrainer("div", attrs={"class": "display bouts"})
+    soup = BeautifulSoup(markup=page.content, features="html.parser", parse_only=factions_strainer)
+    tournament_results = soup.find_all("div",class_="tournament")
     for result in tournament_results: 
         parsed_result = tournament_result_parse(result, username)
         if parsed_result: 
@@ -275,27 +270,26 @@ def full_scrape(tiers = factions_tiers, regions = factions_regions, url_base = f
     - bout_data: 
         pd.DataFrame of tournament results for the specified factions
     """
+    _setup_cache(faction_cache)
+    _setup_cache(player_cache)
+    
     bout_data = pd.DataFrame(columns=results_categories)
     factions_rosters = generate_rosters(tiers, regions, url_base)
-    for faction in factions_rosters.keys():
+    start_time = time.time()
+    for ind, faction in enumerate(factions_rosters.keys()):
         for member in factions_rosters[faction]:
-            start_time = time.time()
             while True: 
                 try: 
                     member_scrape = individual_user_scrape(member)
                     break
-                except ConnectionError: 
+                except NewConnectionError: 
                     if time.time() > start_time + connection_timeout:
                         raise Exception(f"Unable to connect to {member}'s page after {connection_timeout} seconds of ConnectionErrors")
                     else: 
                         print(f"Unable to connect to {member}'s page. Waiting 1 second before attempting again...")
                         time.sleep(1)
             bout_data = pd.concat(objs = [bout_data, member_scrape])
-            #print(member, ":", round(time.time()-start_time, 3), "s to process")
+            #print(f"{member}: {round(time.time()-start_time, 3)} s to process {len(member_scrape)} entries.")
+        if (ind+1) % 10 == 0: 
+            print(f"{ind+1}/{len(factions_rosters)} factions completed. Total elapsed time: {round((time.time() - start_time)/60, 2)} min.")
     return bout_data
-
-
-
-# Initialization during importing    
-_setup_cache(faction_cache)
-_setup_cache(player_cache)
