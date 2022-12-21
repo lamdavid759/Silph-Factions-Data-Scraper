@@ -4,12 +4,14 @@ from bs4 import BeautifulSoup, SoupStrainer
 import re
 import csv
 import time
+from requests.exceptions import ConnectionError
 
 # Writing results
 import pandas as pd 
 
 # Caching
 import os
+import shutil
 from ediblepickle import checkpoint
 from urllib.parse import quote
 
@@ -19,50 +21,26 @@ faction_cache = "__faction_cache__"
 
 # Faction Information
 factions_url_base = "https://silph.gg/factions/cycle/season-2-cycle-3-" # Only thing that should be changed from cycle to cycle. 
-factions_tiers = ["iron", "copper", "bronze", "silver", "gold", "platinum", "diamond", "emerald"]
-factions_regions = ["na", "latam", "emea", "apac"]
+factions_tiers = ["Iron", "Copper", "Bronze", "Silver", "Gold", "Platinum", "Diamond", "Emerald"]
+factions_regions = ["NA", "LATAM", "EMEA", "APAC"]
 results_categories = ["region", "tier", "faction", "player", "format", "season", "cycle", "bout", "record", "mon1", "mon2", "mon3", "mon4", "mon5", "mon6"]
 
-# Function to set up cache directories
-def _setup_cache(path): 
+# Setting up caching directories for checkpoint. 
+def _setup_cache(path, overwrite = False): 
     """
     Helper function to set-up a cache directory for the setpoint. 
     Arguments: 
     - cache_dir: 
-        path string for cache directory. Can be absolute or relative. Default is "cache"
+        path string for cache directory. Can be absolute or relative.
+    - overwrite: 
+        bool for whether to delete the current path. Default is set to False
     """
+    if overwrite and os.path.exists(path): 
+        shutil.rmtree(path, ignore_errors=True)
     if not os.path.exists(path):
         os.mkdir(path)
 
-# Functions to generate the rosters for Silph Factions        
-def generate_rosters(tiers = factions_tiers, regions = factions_regions, url_base = factions_url_base):
-    """
-    Function to generate active Silph Factions rosters for a specified season/cycle, tiers 
-    and regions. 
-    Arguments: 
-    - url_base: 
-        URL that points to latest Silph Season and Cycle; Format is 
-        "https://silph.gg/factions/cycle/season-(season#)-cycle-(cycle#)-"
-        Default value of "https://silph.gg/factions/cycle/season-2-cycle-3-"
-    - tiers: 
-        list of strings that correspond to valid Silph tier(s). 
-        Must be input as a list, even with 1 element. 
-        Default value of ["iron", "copper", "bronze", "silver", "gold", "platinum", 
-                            "diamond", "emerald"] 
-    - regions: 
-        list of strings that correspond to valid Silph region(s). Must be input as a list, 
-        even with 1 element. 
-        Default value of ["na", "latam", "emea", "apac"]
-    Returns:
-    - faction_rosters: 
-        a dictionary of {faction: [members]} in str: list of str format
-    """
-    faction_rosters = {}
-    for tier in tiers:
-        for region in regions: 
-            faction_rosters = {**faction_rosters, **tier_region_scrape(tier, region, url_base)}
-    return faction_rosters
-
+# Set of functions that generate rosters for arbitrary tier and region.        
 @checkpoint(key=lambda args, kwargs: quote(args[0]+"_"+args[1]+".pkl"), work_dir=faction_cache)
 def tier_region_scrape(tier, region, url_base = factions_url_base):
     """
@@ -100,28 +78,77 @@ def tier_region_scrape(tier, region, url_base = factions_url_base):
         faction_rosters[faction_name] = faction_roster
     return faction_rosters
 
-# Functions to process an individual user's Silph Factions directory
-@checkpoint(key=lambda args, kwargs: quote(args[0]) + '.pkl', work_dir=player_cache)
-def individual_user_scrape(username):
+def generate_rosters(tiers = factions_tiers, regions = factions_regions, url_base = factions_url_base):
     """
-    Function to scrape an individual user's results from their Silph Card. 
+    Function to generate active Silph Factions rosters for a specified season/cycle, tiers 
+    and regions. 
     Arguments: 
-    - username: 
-        String of properly formatted Silph username. 
-    Returns: 
-        pd.DataFrame of tournament results for an user
+    - url_base: 
+        URL that points to latest Silph Season and Cycle; Format is 
+        "https://silph.gg/factions/cycle/season-(season#)-cycle-(cycle#)-"
+        Default value of "https://silph.gg/factions/cycle/season-2-cycle-3-"
+    - tiers: 
+        list of strings that correspond to valid Silph tier(s). 
+        Must be input as a list, even with 1 element. 
+        Default value of ["iron", "copper", "bronze", "silver", "gold", "platinum", 
+                            "diamond", "emerald"] 
+    - regions: 
+        list of strings that correspond to valid Silph region(s). Must be input as a list, 
+        even with 1 element. 
+        Default value of ["na", "latam", "emea", "apac"]
+    Returns:
+    - faction_rosters: 
+        a dictionary of {faction: [members]} in str: list of str format
     """
-    all_results = []
-    #Initializes web scrape
-    page = requests.get("https://sil.ph/" + username)
-    factions_strainer = SoupStrainer("div", attrs={"class": "display bouts"})
-    soup = BeautifulSoup(markup=page.content, features="html.parser", parse_only=factions_strainer)
-    tournament_results = soup.find_all("div",class_="tournament")
-    for result in tournament_results: 
-        parsed_result = tournament_result_parse(result, username)
-        if parsed_result: 
-            all_results.append(parsed_result)
-    return pd.DataFrame(all_results, columns=results_categories)
+    faction_rosters = {}
+    for tier in tiers:
+        for region in regions: 
+            faction_rosters = {**faction_rosters, **tier_region_scrape(tier, region, url_base)}
+    return faction_rosters
+
+# Set of functions that operate on an individual user's Silph Card to scrape all valid Faction bouts. 
+def pokemon_name_clean(pokemon_html): 
+    """ 
+    Helper function to standardize Pokemon name formatting: 
+    Arguments: 
+    - pokemon: 
+        HTML snipped scraped from Silph's website that contains the information of a 
+        specific Pokemon. 
+        The Pokemon name will be formatted in the following way: 
+        (Base Name)-(Forme/Region/Size/Cloak)*-(S)*
+        where the fields denoted in * correspond to alternative formes and an optional 
+        designation of whether a Pokemon is shadow. 
+    Returns:
+    - cleaned_name: 
+        reformatted Pokemon name as a str
+    """
+    name = pokemon_html["title"]
+    
+    if name == 'Armored Mewtwo': name = 'Mewtwo-Armor'
+    elif "Alolan" in name: name = name.replace('Alolan ', '') + '-Alola'
+    elif "Galarian" in name: name = name.replace('Galarian ', '') + '-Galar'
+    elif "Hisuian" in name: name = name.replace('Hisuian ', '') + '-Hisui'
+    elif "Forme" in name: 
+        pattern = '\s\(*'
+        result = re.split(pattern,name)
+        name = result[0]+"-"+result[1]
+    elif "Cloak" in name: 
+        pattern = '\s\(*'
+        result = re.split(pattern,name)
+        name = result[0]+"-"+result[1]
+    elif "Size" in name: 
+        pattern = '\s\(*'
+        result = re.split(pattern,name)
+        name = result[0]+"-"+result[1]            
+    elif "Castform" in name:
+        if "Snowy" in name: name = 'Castform-Snowy'
+        elif "Rainy" in name: name = 'Castform-Rainy'
+        elif "Sunny" in name: name = 'Castform-Sunny'
+        elif "Normal" in name: name = 'Castform'                
+    
+    if pokemon_html.find("img", class_="shadow"): name = name + '-S'
+    
+    return name
 
 def tournament_result_parse(result, username): 
     """
@@ -198,51 +225,30 @@ def tournament_result_parse(result, username):
     
     return [region, tier, faction, username, cup_type, int(season), int(cycle), int(bout_number), record] + roster
 
-def pokemon_name_clean(pokemon_html): 
-    """ 
-    Helper function to standardize Pokemon name formatting: 
-    Arguments: 
-    - pokemon: 
-        HTML snipped scraped from Silph's website that contains the information of a 
-        specific Pokemon. 
-        The Pokemon name will be formatted in the following way: 
-        (Base Name)-(Forme/Region/Size/Cloak)*-(S)*
-        where the fields denoted in * correspond to alternative formes and an optional 
-        designation of whether a Pokemon is shadow. 
-    Returns:
-    - cleaned_name: 
-        reformatted Pokemon name as a str
+@checkpoint(key=lambda args, kwargs: quote(args[0]) + '.pkl', work_dir=player_cache)
+def individual_user_scrape(username):
     """
-    name = pokemon_html["title"]
-    
-    if name == 'Armored Mewtwo': name = 'Mewtwo-Armor'
-    elif "Alolan" in name: name = name.replace('Alolan ', '') + '-Alola'
-    elif "Galarian" in name: name = name.replace('Galarian ', '') + '-Galar'
-    elif "Hisuian" in name: name = name.replace('Hisuian ', '') + '-Hisui'
-    elif "Forme" in name: 
-        pattern = '\s\(*'
-        result = re.split(pattern,name)
-        name = result[0]+"-"+result[1]
-    elif "Cloak" in name: 
-        pattern = '\s\(*'
-        result = re.split(pattern,name)
-        name = result[0]+"-"+result[1]
-    elif "Size" in name: 
-        pattern = '\s\(*'
-        result = re.split(pattern,name)
-        name = result[0]+"-"+result[1]            
-    elif "Castform" in name:
-        if "Snowy" in name: name = 'Castform-Snowy'
-        elif "Rainy" in name: name = 'Castform-Rainy'
-        elif "Sunny" in name: name = 'Castform-Sunny'
-        elif "Normal" in name: name = 'Castform'                
-    
-    if pokemon_html.find("img", class_="shadow"): name = name + '-S'
-    
-    return name
+    Function to scrape an individual user's results from their Silph Card. 
+    Arguments: 
+    - username: 
+        String of properly formatted Silph username. 
+    Returns: 
+        pd.DataFrame of tournament results for an user
+    """
+    all_results = []
+    #Initializes web scrape
+    page = requests.get("https://sil.ph/" + username)
+    factions_strainer = SoupStrainer("div", attrs={"class": "display bouts"})
+    soup = BeautifulSoup(markup=page.content, features="html.parser", parse_only=factions_strainer)
+    tournament_results = soup.find_all("div",class_="tournament")
+    for result in tournament_results: 
+        parsed_result = tournament_result_parse(result, username)
+        if parsed_result: 
+            all_results.append(parsed_result)
+    return pd.DataFrame(all_results, columns=results_categories)
 
-# Functions to scrape for results for a given period of bouts for the currently active factions. 
-def full_scrape(tiers = factions_tiers, regions = factions_regions, url_base = factions_url_base, connection_timeout = 30, interval = 1):
+# Main function to scrape results for all valid tiers and regions. 
+def full_scrape(tiers = factions_tiers, regions = factions_regions, url_base = factions_url_base, clear_player_cache = False, connection_timeout = 60, interval = 1):
     """
     Fuction to scrape all of the results for all specified factions in given season-cycles, tiers, and regions. 
     Arguments: 
@@ -262,7 +268,7 @@ def full_scrape(tiers = factions_tiers, regions = factions_regions, url_base = f
     - connection_timeout: 
         time in integer amount of seconds to wait for attempting to 
         scrape a specific user before giving up and moving to the next user. 
-        Default is 30 seconds. 
+        Default is 60 seconds. 
     - interval: 
         time in integer amount of seconds to wait after a failed connection before 
         attempting to reconnect to the same user. Default is 1 second. 
@@ -271,7 +277,7 @@ def full_scrape(tiers = factions_tiers, regions = factions_regions, url_base = f
         pd.DataFrame of tournament results for the specified factions
     """
     _setup_cache(faction_cache)
-    _setup_cache(player_cache)
+    _setup_cache(player_cache, clear_player_cache)
     
     bout_data = pd.DataFrame(columns=results_categories)
     factions_rosters = generate_rosters(tiers, regions, url_base)
@@ -282,7 +288,7 @@ def full_scrape(tiers = factions_tiers, regions = factions_regions, url_base = f
                 try: 
                     member_scrape = individual_user_scrape(member)
                     break
-                except NewConnectionError: 
+                except ConnectionError: 
                     if time.time() > start_time + connection_timeout:
                         raise Exception(f"Unable to connect to {member}'s page after {connection_timeout} seconds of ConnectionErrors")
                     else: 
@@ -293,3 +299,115 @@ def full_scrape(tiers = factions_tiers, regions = factions_regions, url_base = f
         if (ind+1) % 10 == 0: 
             print(f"{ind+1}/{len(factions_rosters)} factions completed. Total elapsed time: {round((time.time() - start_time)/60, 2)} min.")
     return bout_data
+
+# Set of additional functions to further filter the full scrape in a programmatic fashion. 
+def enumerate_bouts(bout_start, bout_end = None):
+    """
+    Helper function to convert desired bouts into a suitable dictionary format for filtered_results()
+    Arguments: 
+    - bout_start: 
+        Starting bout for scrape in (season, cycle, bout) format. Must be a valid bout. 
+    - bout_end: 
+        (Optional) ending bout for scrape in (season, cycle, bout) format. If no value is specified, defaults to enumerating all bouts after the starting bout. 
+    Returns: 
+    - filter_list: 
+        A list of dictionaries of the form {filter: value} that is properly formatted. Each dictionary corresponds to a specific bout.  
+    """
+    # Tuples of valid bouts in (season, cycle, bout) format
+    valid_bouts = ([(0, 1, i) for i in range(1, 5+1)] 
+                   + [(0, 2, i) for i in range(1, 5+1)] 
+                   + [(1, 1, i) for i in range(1, 8+1)] 
+                   + [(1, 2, i) for i in range(1, 8+1)] 
+                   + [(1, 3, i) for i in range(1, 7+1)]
+                   + [(2, 1, i) for i in range(1, 9+1)]
+                   + [(2, 2, i) for i in range(1, 9+1)]
+                   + [(2, 3, i) for i in range(1, 9+1)])
+    try: 
+        start = valid_bouts.index(bout_start)
+    except ValueError as e:
+        print(f"{e}. Please enter a valid starting bout.")
+    
+    try: 
+        if bout_end: 
+            end = valid_bouts.index(bout_end)+1
+        else: 
+            end = None
+    except ValueError as e:
+        print(f"{e}. Please enter a valid ending bout.")
+        
+    filter_list = []
+    for season, cycle, bout in valid_bouts[start:end]: 
+        bout_dict = {}
+        bout_dict["season"] = season
+        bout_dict["cycle"] = cycle
+        bout_dict["bout"] = bout
+        filter_list.append(bout_dict)
+    return filter_list
+
+def add_filter(filter_list, filter_on, values): 
+    """
+    Arguments: 
+    - filter_list: a list of dictionaries with filters that will be augmented by an additional filter. Dictionaries are in {filter: value}
+    - filter_on: str of desired filter, provided in lowercase. The filter must correspond to the columns of a pd.DataFrame scrape, enumerated in results_categories: 
+        ["region", "tier", "faction", "player", "format", "season", "cycle", "bout", "record", "mon1", "mon2", "mon3", "mon4", "mon5", "mon6"]
+    - values: a str or list of strs of desired values to filter on corresponding to filter_on.
+        A secondary check is done on the values if the filter_on is "region" or "tier". This check is done by setting proper. 
+        No secondary check exists on the 
+    
+    Returns: 
+    - modified_filtered_list: A modified list of dictionaries that contain the same filters as the input filter_list with the additional filter added on each dictionary. If 
+        values is a single str, the length of modified_filtered_list will be the same as filter list, otherwise it will be n*len(filter_list), where n is the number of entries
+        provided in values. 
+    """
+    # Handling argument formatting and checking for valid filters. 
+    filter_on = str.lower(filter_on)
+    if filter_on not in results_categories:
+        raise Exception("""The desired filter is not a valid option in the available filters 
+            ['region', 'tier', 'faction', 'player', 'format', 'season', 'cycle', 'bout', 'record', 'mon1', 'mon2', 'mon3', 'mon4', 'mon5', 'mon6']. 
+            Please correct your filter name or change the desired filter.""")  
+    if not isinstance(values, list): 
+        values = [values]
+    if filter_on == "region":
+        values = [string.upper() for string in values]
+        diff = set(values)-set(factions_regions)
+    if filter_on == "tier":
+        values = [string.title() for string in values]
+        diff = set(values)-set(factions_tiers)
+        
+    if diff: 
+        raise Exception(f"Some values were improperly entered. Please check the values {diff} and correct your input.")
+    
+    # If the arguments pass all checks, continue onward to generate the modified_filtered_list. 
+    return [{**filter_dict, **{filter_on: value}} for value in values for filter_dict in filter_list]
+
+def filtered_results(results,**kwargs):
+    """
+    Filters results for more fine-grained data. 
+    Arguments: 
+    - results: 
+        a pd.DataFrame obtained by running full_scrape() with the following columns: 
+        [region: str, tier: str, faction: str, username: str, cup_type: str, season: 
+         int, cycle: int, bout: int, record: str, mon1: str, mon2: str, mon3: str, 
+         mon4: str, mon5: str, mon6: str]
+    - kwargs: 
+        Filter criteria. Currently acceptable criteria are enumerated in results_categories: 
+        ["region", "tier", "faction", "player", "format", "season", "cycle", "bout", "record", "mon1", "mon2", "mon3", "mon4", "mon5", "mon6"]
+        Accepts either manually entered in filters in keyword = value format or takes a dictionary of filters generated from enumerate_bouts() and add_filter() functions by
+        passing **dict. 
+    Returns: 
+    - filtered_results:
+        a pd.DataFrame with the same columns as the results DataFrame after applying the relevant filters 
+    """
+    filtered_result = results
+    for key, value in kwargs.items():
+        filtered_result = filtered_result[filtered_result[key] == value].copy()
+    return filtered_result.sort_values("season", "cycle", "bout", ascending=False)
+
+def subset_results(results, filter_list, save=False):
+    subset = pd.DataFrame(columns=results.columns)
+    for filters in filter_list: 
+        subset.concat(filtered_results(results, **filters))
+    
+    if save: 
+        subset.to_csv(save)
+        return subset
