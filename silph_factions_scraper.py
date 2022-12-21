@@ -367,20 +367,21 @@ def add_filter(filter_list, filter_on, values):
             Please correct your filter name or change the desired filter.""")  
     if not isinstance(values, list): 
         values = [values]
+    
+    diff = None
     if filter_on == "region":
         values = [string.upper() for string in values]
         diff = set(values)-set(factions_regions)
     if filter_on == "tier":
         values = [string.title() for string in values]
-        diff = set(values)-set(factions_tiers)
-        
+        diff = set(values)-set(factions_tiers)   
     if diff: 
         raise Exception(f"Some values were improperly entered. Please check the values {diff} and correct your input.")
     
     # If the arguments pass all checks, continue onward to generate the modified_filtered_list. 
     return [{**filter_dict, **{filter_on: value}} for value in values for filter_dict in filter_list]
 
-def filtered_results(results,**kwargs):
+def filtered_results(results,save=False,**kwargs):
     """
     Filters results for more fine-grained data. 
     Arguments: 
@@ -401,13 +402,36 @@ def filtered_results(results,**kwargs):
     filtered_result = results
     for key, value in kwargs.items():
         filtered_result = filtered_result[filtered_result[key] == value].copy()
-    return filtered_result.sort_values("season", "cycle", "bout", ascending=False)
+    filtered_result.sort_values(["season", "cycle", "bout"], ascending=False)    
+    
+    if save: 
+        filtered_result.to_csv(save)
+    return filtered_result
 
 def subset_results(results, filter_list, save=False):
+    """
+    Wrapper function to collect the DataFrames of multiple filter conditions. 
+    Arguments: 
+    - results: 
+        a pd.DataFrame obtained by running full_scrape() with the following columns: 
+        [region: str, tier: str, faction: str, username: str, cup_type: str, season: 
+         int, cycle: int, bout: int, record: str, mon1: str, mon2: str, mon3: str, 
+         mon4: str, mon5: str, mon6: str]
+    - filter_list: list of dictionaries with filters in {filter: value} format. Each filter has exactly 1 value. 
+    - (optional) save: Default to False. If a csv file is desired, set save = name of file in str form, e.g., "S2_C3_B1.csv"
+    
+    Output: 
+    - subset: 
+         a pd.DataFrame obtained by concatenating each DataFrame for a given filter query with the following columns: 
+        [region: str, tier: str, faction: str, username: str, cup_type: str, season: 
+         int, cycle: int, bout: int, record: str, mon1: str, mon2: str, mon3: str, 
+         mon4: str, mon5: str, mon6: str]
+    """
     subset = pd.DataFrame(columns=results.columns)
     for filters in filter_list: 
-        subset.concat(filtered_results(results, **filters))
+        subset = pd.concat([subset, filtered_results(results, **filters)])
+    subset.sort_values(["season", "cycle", "bout"], ascending=False)
     
     if save: 
         subset.to_csv(save)
-        return subset
+    return subset
