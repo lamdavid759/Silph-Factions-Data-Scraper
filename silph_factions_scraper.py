@@ -435,3 +435,6 @@ def subset_results(results, filter_list, save=False):
     if save: 
         subset.to_csv(save)
     return subset
+
+_setup_cache("__player_cache__")
+_setup_cache("__faction_cache__")
