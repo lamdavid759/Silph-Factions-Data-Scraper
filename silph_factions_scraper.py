@@ -223,6 +223,10 @@ def tournament_result_parse(result, username):
 
     roster = [pokemon_name_clean(mon) for mon in result.find_all(class_="pokemon")]
     
+    # If roster is for some reason empty, pad it with "N/A" until it is an array of 6 Pokemon
+    while len(roster) < 6: 
+        roster.append("N/A")
+    
     return [region, tier, faction, username, cup_type, int(season), int(cycle), int(bout_number), record] + roster
 
 @checkpoint(key=lambda args, kwargs: quote(args[0]) + '.pkl', work_dir=player_cache)
