@@ -355,13 +355,11 @@ def add_filter(filter_list, filter_on, values):
     - filter_on: str of desired filter, provided in lowercase. The filter must correspond to the columns of a pd.DataFrame scrape, enumerated in results_categories: 
         ["region", "tier", "faction", "player", "format", "season", "cycle", "bout", "record", "mon1", "mon2", "mon3", "mon4", "mon5", "mon6"]
     - values: a str or list of strs of desired values to filter on corresponding to filter_on.
-        A secondary check is done on the values if the filter_on is "region" or "tier". This check is done by setting proper. 
-        No secondary check exists on the 
+        A secondary check is done on the values if the filter_on is "region" or "tier". This check is done by checking if the values are a proper subset of the accepted values. 
+        No secondary check exists on the other columns -- if the entry does not exist, the filter will simply not return any results. 
     
     Returns: 
-    - modified_filtered_list: A modified list of dictionaries that contain the same filters as the input filter_list with the additional filter added on each dictionary. If 
-        values is a single str, the length of modified_filtered_list will be the same as filter list, otherwise it will be n*len(filter_list), where n is the number of entries
-        provided in values. 
+    - modified_filtered_list: A modified list of dictionaries that contain the same filters as the input filter_list with the additional filter added on each dictionary. If values is a single str, the length of modified_filtered_list will be the same as filter list, otherwise it will be n*len(filter_list), where n is the number of entries provided in values. 
     """
     # Handling argument formatting and checking for valid filters. 
     filter_on = str.lower(filter_on)
