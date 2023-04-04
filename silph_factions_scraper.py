@@ -20,7 +20,7 @@ player_cache = "__player_cache__"
 faction_cache = "__faction_cache__"
 
 # Faction Information
-factions_url_base = "https://silph.gg/factions/cycle/season-2-cycle-3-" # Only thing that should be changed from cycle to cycle. 
+factions_url_base = "https://silph.gg/factions/cycle/season-2-cycle-4-" # Only thing that should be changed from cycle to cycle. 
 factions_tiers = ["Iron", "Copper", "Bronze", "Silver", "Gold", "Platinum", "Diamond", "Emerald"]
 factions_regions = ["NA", "LATAM", "EMEA", "APAC"]
 results_categories = ["region", "tier", "faction", "player", "format", "season", "cycle", "bout", "record", "mon1", "mon2", "mon3", "mon4", "mon5", "mon6"]
