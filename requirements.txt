@@ -30,5 +30,7 @@ six==1.16.0
     # via python-dateutil
 soupsieve==2.3.2.post1
     # via beautifulsoup4
+tqdm==4.65.0
+    # via -r requirements.in
 urllib3==1.26.13
     # via requests
