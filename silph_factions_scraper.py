@@ -4,10 +4,14 @@ from bs4 import BeautifulSoup, SoupStrainer
 import re
 import csv
 import time
+from datetime import date
+import argparse
 from requests.exceptions import ConnectionError
+from ssl import SSLEOFError
 
 # Writing results
 import pandas as pd 
+import tqdm
 
 # Caching
 import os
@@ -101,7 +105,7 @@ def generate_rosters(tiers = factions_tiers, regions = factions_regions, url_bas
         a dictionary of {faction: [members]} in str: list of str format
     """
     faction_rosters = {}
-    for tier in tiers:
+    for tier in tqdm.tqdm(tiers):
         for region in regions: 
             faction_rosters = {**faction_rosters, **tier_region_scrape(tier, region, url_base)}
     return faction_rosters
@@ -284,24 +288,23 @@ def full_scrape(tiers = factions_tiers, regions = factions_regions, url_base = f
     _setup_cache(player_cache, clear_player_cache)
     
     bout_data = pd.DataFrame(columns=results_categories)
+    print("Generating/loading factions rosters...")
     factions_rosters = generate_rosters(tiers, regions, url_base)
-    start_time = time.time()
-    for ind, faction in enumerate(factions_rosters.keys()):
+    print("Generating player Pokemon rosters...")
+    for ind, faction in tqdm.tqdm(enumerate(factions_rosters.keys()), total=len(factions_rosters.keys())):
         for member in factions_rosters[faction]:
+            start_time = time.time()
             while True: 
                 try: 
                     member_scrape = individual_user_scrape(member)
                     break
-                except ConnectionError: 
+                except (ConnectionError, SSLEOFError): 
                     if time.time() > start_time + connection_timeout:
                         raise Exception(f"Unable to connect to {member}'s page after {connection_timeout} seconds of ConnectionErrors")
                     else: 
                         print(f"Unable to connect to {member}'s page. Waiting 1 second before attempting again...")
                         time.sleep(1)
             bout_data = pd.concat(objs = [bout_data, member_scrape])
-            #print(f"{member}: {round(time.time()-start_time, 3)} s to process {len(member_scrape)} entries.")
-        if (ind+1) % 10 == 0: 
-            print(f"{ind+1}/{len(factions_rosters)} factions completed. Total elapsed time: {round((time.time() - start_time)/60, 2)} min.")
     return bout_data
 
 # Set of additional functions to further filter the full scrape in a programmatic fashion. 
@@ -325,7 +328,8 @@ def enumerate_bouts(bout_start, bout_end = None):
                    + [(1, 3, i) for i in range(1, 7+1)]
                    + [(2, 1, i) for i in range(1, 9+1)]
                    + [(2, 2, i) for i in range(1, 9+1)]
-                   + [(2, 3, i) for i in range(1, 9+1)])
+                   + [(2, 3, i) for i in range(1, 9+1)]
+                   + [(2, 4, i) for i in range(1, 9+1)])
     try: 
         start = valid_bouts.index(bout_start)
     except ValueError as e:
@@ -440,3 +444,27 @@ def subset_results(results, filter_list, save=False):
 
 _setup_cache("__player_cache__")
 _setup_cache("__faction_cache__")
+
+if __name__ == "__main__": 
+    parser = argparse.ArgumentParser(
+                    prog='Silph Factions Scraper',
+                    description='Scrapes roster information for Silph Factions')
+    parser.add_argument('--savepath', help="Directory to save results")
+    parser.add_argument('--clear_player_cache', help="Clear player cache if scraping for a new bout.", action='store_true')
+
+    args = parser.parse_args()
+    clear_player_cache = args.clear_player_cache
+    savepath = args.savepath
+
+    results = None
+    try: 
+        results = full_scrape(clear_player_cache = clear_player_cache)
+    except Exception: 
+        while results == None: 
+            print("Error while scraping. Restarting scrape...")
+            results = full_scrape(clear_player_cache = False)
+
+    if savepath: 
+        results.to_pickle(savepath+ "/" + str(date.today()) + ".pkl")
+    else: 
+        results.to_pickle(str(date.today()) +".pkl")

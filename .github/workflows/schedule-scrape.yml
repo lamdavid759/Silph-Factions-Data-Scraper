@@ -1,0 +1,29 @@
+name: schedule-scrape
+on: 
+  schedule:
+    - cron: '30 0 * * 2'
+ 
+jobs:
+  scrape-silph:
+    runs-on: ubuntu-latest
+    permissions: write-all 
+    steps: 
+      - uses: actions/checkout@v3
+      
+      - uses: actions/setup-python@v4 
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Create results directory
+        run: mkdir results 
+
+      - name: Run Silph factions scrape
+        run: python silph_factions_scraper.py --savepath results --clear_player_cache
+      
+      - uses: actions/upload-artifact@v3
+        with:
+          name: scrape-pickled-file
+          path: results/*
