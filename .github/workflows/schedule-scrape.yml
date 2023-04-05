@@ -2,6 +2,7 @@ name: schedule-scrape
 on: 
   schedule:
     - cron: '30 0 * * 2'
+  push:
  
 jobs:
   scrape-silph:
